@@ -1,0 +1,135 @@
+Entity:
+Product
+
+Attributes:
+ID (Unique)
+name
+description
+unit price
+stock quantity
+date added
+
+Relationships:
+Every product belongs to a category, such as Electronics, Clothing, or Home Appliances.
+Some products may belong to subcategories, which are also stored in the same table, allowing a category to have multiple subcategories (e.g., “Laptops” under “Electronics”)
+a product may come from more than one supplier
+---
+Entity:
+Category
+
+Attributes:
+ID (Unique)
+name
+description
+
+Relationships:
+Category have multiple subcategories
+---
+Entity:
+Supplier
+
+Attributes:
+ID (Unique)
+name
+contact number
+email
+address
+country
+
+Relationships:
+A supplier can supply multiple products
+---
+Entity:
+Customer
+
+Attributes:
+ID (Unique)
+full name
+phone number
+email
+shipping address
+registration date
+
+Relationships:
+A customer can place multiple orders
+---
+Entity:
+Order
+
+Attributes:
+ID (Unique)
+order date
+total amount
+status
+payment method
+
+Relationships:
+Each order contains one or more products.
+Each order belongs to one customer
+Each order can contain many order items
+Each order can have one or more shipments
+---
+Entity (Weak):
+Order Item ----> Order
+
+Attributes:
+product
+quantity
+unit price
+
+Relationships:
+_____
+---
+Entity:
+Shipment
+
+Attributes:
+ID (Unique)
+shipment date
+delivery date
+carrier name
+tracking number
+current status
+
+Relationships:
+____
+---
+Entity:
+Payment
+
+Attributes:
+ID (Unique)
+payment date
+amount
+method
+status
+
+Relationships:
+Payments are linked to orders, and sometimes a single payment may cover multiple orders, such as when a customer preloads store credit.
+---
+Entity:
+Stock Transaction
+
+Attributes:
+ID (Unique)
+product ID
+transaction date
+quantity change
+type
+reference
+
+Relationships:
+
+The system keeps stock transactions that record whenever a product’s quantity changes due to new stock arrivals or customer purchases
+---
+Entity:
+Reviews
+
+Attributes:
+ID (Unique)
+rating
+comment
+date
+
+Relationships:
+Each review  references both the product and the customer who wrote it
