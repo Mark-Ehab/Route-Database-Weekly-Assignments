@@ -124,7 +124,6 @@ ON P.PostTypeId = PT.Id
 	10) Write a query to retrieve all comments along with the post title,
         post author, and the commenter's display name.
 ==============================================================================*/
-
 SELECT Post.Title AS 'Post Title', 
 	   Author.DisplayName AS 'Author Name',
 	   Commenter.DisplayName AS 'Commenter Name'
