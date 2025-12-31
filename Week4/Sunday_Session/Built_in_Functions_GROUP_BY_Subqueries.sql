@@ -45,8 +45,10 @@ GROUP BY P.OwnerUserId
 SELECT DisplayName AS 'User Name',
        Reputation  AS 'User Reputation'
 FROM Users
-WHERE Reputation > (SELECT ROUND(AVG(Reputation * 1.0),0)
-FROM Users) 
+WHERE Reputation > (
+						SELECT ROUND(AVG(Reputation * 1.0),0)
+						FROM Users
+				   ) 
 
 /*=====================================================
 	5) Write a query to display each post title along 
@@ -79,10 +81,12 @@ HAVING COUNT(Id) > 100
 	   count badges for each user.
 ======================================================*/
 SELECT DisplayName AS 'Username',
-       (SELECT COUNT(Id) 
-	    FROM Badges AS B 
-		WHERE B.UserId = U.Id 
-		GROUP BY UserId) AS 'Total Number Badges Per User'
+       (
+		   SELECT COUNT(Id) 
+		   FROM Badges AS B 
+		   WHERE B.UserId = U.Id 
+		   GROUP BY UserId
+	   ) AS 'Total Number Badges Per User'
 FROM Users AS U
 
 /*=====================================================
