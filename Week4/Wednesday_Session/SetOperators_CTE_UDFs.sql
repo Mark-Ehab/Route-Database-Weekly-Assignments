@@ -156,7 +156,7 @@ HAVING COUNT(C.Id) >= 3
        Test your solution by displaying posts with their 
 	   calculated ages.
 ==========================================================*/
--- Create PostCreationAge function
+-- Create PostCreationAge Function in dbo Schema (Main)
 GO
 CREATE OR ALTER FUNCTION dbo.PostCreationAge(@CreationDate DATETIME)
 RETURNS INT
@@ -184,7 +184,7 @@ FROM Posts;
        'Bronze' if reputation > 1000 AND posts > 5
        'None' otherwise
 ==========================================================*/
--- Create SetBadgeLevel function
+-- Create SetBadgeLevel Function in dbo Schema (Main)
 GO
 CREATE OR ALTER FUNCTION dbo.SetBadgeLevel(@Reputation INT, @PostCount INT)
 RETURNS VARCHAR(10)
@@ -221,7 +221,7 @@ GROUP BY U.Id, U.Reputation;
         Test with different day ranges (e.g., 30 days, 
 		90 days).
 ==========================================================*/
--- Create GetPostsCreatedWithinSpecificPeriod function
+-- Create GetPostsCreatedWithinSpecificPeriod Function in dbo Schema (Main)
 GO
 CREATE OR ALTER FUNCTION dbo.GetPostsCreatedWithinSpecificPeriod(@DaysBack INT)
 RETURNS TABLE
@@ -254,8 +254,9 @@ FROM dbo.GetPostsCreatedWithinSpecificPeriod(6229);
         If @Location is NULL, return users from all locations.
         Test with different parameters.
 ==========================================================*/
+-- Create FindTopUsersFromSpecificLocationsV1 (MSTVF) Function in dbo Schema (Main)
 GO
-CREATE OR ALTER FUNCTION dbo.FindTopUsersFromSpecificLocations(@MinReputation INT, @Location VARCHAR(100) = NULL)
+CREATE OR ALTER FUNCTION dbo.FindTopUsersFromSpecificLocationsV1(@MinReputation INT, @Location VARCHAR(100) = NULL)
 RETURNS @TopUsersLocations TABLE
 (
 	UserId INT,
@@ -289,11 +290,35 @@ END;
 
 -- Test the function
 SELECT *
-FROM dbo.FindTopUsersFromSpecificLocations(1000 , 'Oakland, CA')
+FROM dbo.FindTopUsersFromSpecificLocationsV1(1000 , 'Oakland, CA')
 
 SELECT *
-FROM dbo.FindTopUsersFromSpecificLocations(1000,DEFAULT);
+FROM dbo.FindTopUsersFromSpecificLocationsV1(1000,DEFAULT);
 
+------------- Other Solution Using ITVF (Best for Performance) -------------
+
+-- Create FindTopUsersFromSpecificLocationsV2 (ITVF) Function in dbo Schema (Main)
+GO
+CREATE OR ALTER FUNCTION dbo.FindTopUsersFromSpecificLocationsV2(@MinReputation INT, @Location VARCHAR(100) = NULL)
+RETURNS TABLE
+AS 
+RETURN
+(		
+	SELECT Id AS UserId,
+			   DisplayName,
+			   Reputation,
+			   [Location],
+			   CreationDate
+		FROM Users
+		WHERE Reputation >= @MinReputation AND (@Location = [Location] OR @Location IS NULL) 
+)
+
+-- Test the function
+SELECT *
+FROM dbo.FindTopUsersFromSpecificLocationsV2(1000 , 'Oakland, CA')
+
+SELECT *
+FROM dbo.FindTopUsersFromSpecificLocationsV2(1000,DEFAULT);
 
 /*==========================================================
 	12) Write a query to find the top 3 highest scoring 
