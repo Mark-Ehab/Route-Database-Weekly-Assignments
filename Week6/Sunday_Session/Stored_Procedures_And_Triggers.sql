@@ -871,6 +871,7 @@ EXECUTE sp_BulkInsertBadges @UserId = 3234239,
                             @NumOfBadgesToBeInserted = 20
 EXECUTE sp_BulkInsertBadges @UserId = 2,
                             @NumOfBadgesToBeInserted = -20
+
 /*===========================================================================================
 	13) Create a stored procedure named sp_GenerateUserReport that generates a complete user
         report.
@@ -1175,6 +1176,9 @@ BEGIN
                 D.[Title],
                 D.[ViewCount]
         FROM Deleted AS D;
+
+        -- Print that deleted posts are archived successfully
+        PRINT CHAR(10) + CAST(@@ROWCOUNT AS VARCHAR(500)) + ' post(s) is/are archieved successfully !'; 
     END
 
     -- Test created trigger by deleting a specific post from Posts table
@@ -1436,6 +1440,44 @@ WHERE Id = 5
 	7) Create a DDL trigger at the database level that prevents any table from being dropped.
        All drop table attempts should be logged in the ChangeLog table.
 =============================================================================================*/
+-- Create a DDL trigger at the database level that prevents any table from being dropped
+-- called trg_PreventTableDropDB
+GO
+CREATE OR ALTER TRIGGER trg_PreventTableDropDB
+ON DATABASE
+FOR DROP_TABLE
+AS
+BEGIN
+    -- Disable COUNT messages
+    SET NOCOUNT ON;
+
+    -- Variables Definition
+    -- Create a variable to hold event data
+    DECLARE @DDLEventData XML = EVENTDATA();
+    -- Create a variable to hold table name on which action is applied
+    DECLARE @TableName NVARCHAR(MAX) = @DDLEventData.value('(/EVENT_INSTANCE/ObjectName)[1]','NVARCHAR(MAX)');
+
+    -- Halt the DROP_TABLE action by rolling back the transaction to ActionLog savepoint
+    ROLLBACK;
+
+    -- Print that user is not authorized to drop concerned table on StackOverflow2010 database
+    PRINT CHAR(10) + 
+            'You are not authorized to drop table ' + @TableName +
+            ' on StackOverflow2010 Database !';
+
+    -- Log the table drop attempt into ChangeLog table
+    INSERT INTO ChangeLog (TableName,
+                           ActionType,
+                           Details,
+                           LogTime)
+    VALUES(@TableName,    
+            'DROP_TABLE',
+            CONCAT('An attempt to drop the table called ',@TableName),
+            SYSDATETIME())
+END
+
+-- Test the created trigger by trying to drop any table on StackOverflow2010 database
+DROP TABLE [dbo].[Comments_Template];
 
 /*===========================================================================================
 	8) Create a DDL trigger that logs all CREATE TABLE operations.
@@ -1443,12 +1485,88 @@ WHERE Id = 5
        ● The action type
        ● The full SQL command used to create the table
 =============================================================================================*/
+-- Create a DDL trigger that logs all CREATE TABLE operations called trg_LogTableCreate
+GO
+CREATE OR ALTER TRIGGER trg_LogTableCreate
+ON DATABASE
+FOR CREATE_TABLE
+AS
+BEGIN
+    -- Disable COUNT messages
+    SET NOCOUNT ON;
+
+    -- Variables Definition
+    -- Create a variable to hold event data
+    DECLARE @DDLEventData XML = EVENTDATA();
+    -- Create a variable to hold table name on which action is applied
+    DECLARE @TableName NVARCHAR(MAX) = @DDLEventData.value('(/EVENT_INSTANCE/ObjectName)[1]','NVARCHAR(MAX)');
+    -- Create a variable to hold full SQL command used to create the table 
+    DECLARE @TSQLCommand NVARCHAR(MAX) = @DDLEventData.value('(/EVENT_INSTANCE/TSQLCommand/CommandText)[1]','NVARCHAR(MAX)');
+
+    -- Print that table is created successfully
+    PRINT CHAR(10) + @TableName + ' is created successfully !';
+
+    -- Log the table creation attempt into ChangeLog table
+    INSERT INTO ChangeLog (TableName,
+                           ActionType,
+                           Details,
+                           LogTime)
+    VALUES(@TableName,     
+            'CREATE_TABLE',
+            CONCAT('An attempt to create a table called ',@TableName,' using the following command ',@TSQLCommand),
+            SYSDATETIME())
+END
+
+-- Test the created trigger by trying to drop any table on StackOverflow2010 database
+CREATE TABLE [dbo].[Comments_Template] (Id INT PRIMARY KEY,Score INT);
 
 /*===========================================================================================
 	9) Create a DDL trigger that prevents any ALTER TABLE statement that attempts to drop a
        column.
        All blocked attempts should be logged
 =============================================================================================*/
+-- Create a DDL trigger that prevents any ALTER TABLE statement that attempts to drop a
+-- column called trg_PreventTableColumnDropDB
+GO
+CREATE OR ALTER TRIGGER trg_PreventTableColumnDropDB
+ON DATABASE
+FOR ALTER_TABLE
+AS
+BEGIN
+    -- Disable COUNT messages
+    SET NOCOUNT ON;
+
+    -- Variable Definitions
+    DECLARE @EventData XML = EVENTDATA();
+    DECLARE @TableName NVARCHAR(MAX) = @EventData.value('(/EVENT_INSTANCE/ObjectName)[1]','NVARCHAR(MAX)');
+    DECLARE @ColumnName NVARCHAR(MAX) = @EventData.value('(/EVENT_INSTANCE/AlterTableActionList/Drop/Columns/Name)[1]','NVARCHAR(MAX)');   
+    DECLARE @TSQLCommand NVARCHAR(MAX) = @EventData.value('(/EVENT_INSTANCE/TSQLCommand/CommandText)[1]','NVARCHAR(MAX)');
+
+    -- Check if there is an attempt to drop a column in a specific table
+    IF @TSQLCommand LIKE '%DROP COLUMN%'
+    BEGIN
+        
+        -- Print that user is not authorized to drop the concerned column 
+        PRINT CHAR(10) + 'You are not authorized to drop column ' + @ColumnName + ' on table ' + @TableName;
+        
+        -- Rollback the transaction
+        ROLLBACK; 
+        
+        -- Log the column drop attempt on a specific table into the ChangeLog table
+        INSERT INTO ChangeLog (TableName,       
+                               ActionType,
+                               Details,
+                               LogTime)
+        VALUES (@TableName,
+                'DROP_COLUMN',
+                CONCAT('An attempt to drop column ',@ColumnName,' on table ',@TableName),
+                SYSDATETIME());
+    END
+END
+
+-- Test the created trigger 
+ALTER TABLE [dbo].[Comments_Template]
+DROP COLUMN [Score]
 
 /*===========================================================================================
 	10) Create a single trigger on the Badges table that tracks INSERT, UPDATE, and DELETE
@@ -1627,11 +1745,11 @@ SELECT * FROM PostStatistics;
 GO
 CREATE OR ALTER TRIGGER trg_PreventDeletePostsAbove100
 ON Posts
-AFTER DELETE
+INSTEAD OF DELETE
 AS
 BEGIN
     -- Disable COUNT messages
-    --SET NOCOUNT ON;
+    SET NOCOUNT ON;
 
     -- Check if the score of deleted post is above 100 
     IF EXISTS (SELECT 1 FROM DELETED WHERE Score > 100)
@@ -1653,7 +1771,6 @@ BEGIN
         RAISERROR('Posts with score greater than 100 cannot be deleted',17,1);
 
         -- Exit the trigger
-        ROLLBACK;
         RETURN;
     END
 
@@ -1662,20 +1779,14 @@ BEGIN
     FROM Posts AS P
     INNER JOIN Deleted AS D
     ON P.Id = D.Id
-
-    -- Read number of affected rows from @ROWCOUNTER
-    DECLARE @NumOfAffectedRows INT = @@ROWCOUNT;
-
-    -- Print that deleted posts are archived successfully
-    PRINT CHAR(10) + CAST(@NumOfAffectedRows AS VARCHAR(500)) + ' post(s) is/are archieved successfully !'; 
 END
 
 -- Test the created trigger 
 DELETE Posts
-WHERE Id = 12496723
+WHERE Id = 12496719
 
 DELETE Posts
-WHERE Id = 12496730
+WHERE Id = 12496732
 
 SELECT * FROM Posts ORDER BY Id DESC;
 
@@ -1685,7 +1796,7 @@ SELECT * FROM Posts ORDER BY Id DESC;
         2. Enable the same trigger again
         3. Check whether the trigger is currently enabled or disabled
 =============================================================================================*/
--- Disable [trg_PreventDeletePostsAbove100] trigger
+-- Disable trg_PreventDeletePostsAbove100 trigger
 GO
 DISABLE TRIGGER DBO.[trg_PreventDeletePostsAbove100]
 ON Posts
@@ -1700,7 +1811,7 @@ WHERE parent_id = object_id('Posts')
 DELETE Posts
 WHERE Id = 12496730
 
--- Enable [trg_PreventDeletePostsAbove100] trigger
+-- Enable trg_PreventDeletePostsAbove100 trigger
 GO
 ENABLE TRIGGER DBO.[trg_PreventDeletePostsAbove100]
 ON Posts
