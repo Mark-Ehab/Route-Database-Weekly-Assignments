@@ -1667,17 +1667,22 @@ SELECT * FROM Badges ORDER BY Id DESC
         ● Total number of posts
         ● Total score
         ● Average score
-        for the affected users.
+          for the affected users.
 =============================================================================================*/
 -- Create PostStatistics table
-SELECT COUNT(*) AS TotalNumberOfPosts,  
-       SUM(Score) AS TotalPostScore,
-       ROUND(AVG(CAST(Score AS DECIMAL(10,2))),2) AS AveragePostsScore
+GO
+SELECT OwnerUserId AS UserId,
+       COUNT(*) AS TotalNumberOfPostsPerUser,  
+       SUM(Score) AS TotalPostScorePerUser,
+       ROUND(AVG(CAST(Score AS DECIMAL(10,2))),2) AS AveragePostsScorePerUser
 INTO PostStatistics
 FROM Posts
+GROUP BY OwnerUserId;
 
 -- Test if PostStatistics table is created successfully
 SELECT * FROM PostStatistics
+SELECT * FROM Posts ORDER BY OwnerUserId
+
 
 -- Create an AFTER trigger that maintains summary statistics in a PostStatistics table whenever 
 -- posts are inserted, updated, or deleted called trg_MainPostStats
@@ -1691,10 +1696,26 @@ BEGIN
     SET NOCOUNT ON;
 
     -- Update posts statistics after DML operation is committed 
-    Update PostStatistics
-    SET TotalNumberOfPosts = (SELECT COUNT(*) FROM Posts),  
-        TotalPostScore = (SELECT SUM(Score) FROM Posts),
-        AveragePostsScore = (SELECT ROUND(AVG(CAST(Score AS DECIMAL(10,2))),2) FROM Posts)
+    WITH UPS 
+    AS
+    (
+        SELECT OwnerUserId AS UserId,
+        COUNT(*) AS TotalNumberOfPostsPerUser,  
+        SUM(Score) AS TotalPostScorePerUser,
+        ROUND(AVG(CAST(Score AS DECIMAL(10,2))),2) AS AveragePostsScorePerUser
+        FROM Posts
+        GROUP BY OwnerUserId
+    )
+    Update PS
+    SET PS.TotalNumberOfPostsPerUser = UPS.TotalNumberOfPostsPerUser ,  
+        PS.TotalPostScorePerUser = UPS.TotalPostScorePerUser,
+        PS.AveragePostsScorePerUser =  UPS.AveragePostsScorePerUser
+    FROM PostStatistics AS PS
+    INNER JOIN UPS 
+    ON UPS.UserId = PS.UserId 
+       AND (PS.TotalNumberOfPostsPerUser != UPS.TotalNumberOfPostsPerUser 
+            OR PS.TotalPostScorePerUser != UPS.TotalPostScorePerUser
+            OR PS.AveragePostsScorePerUser !=  UPS.AveragePostsScorePerUser)
 
     -- Print the post statistics are updated successfully
     PRINT CHAR(10) + 'Post Statistics are updated successfully !';
@@ -1716,7 +1737,7 @@ VALUES (
         'Test Test Test Test Test Test Test Test Test Test Test Test Test',
         SYSDATETIME(),
         1,
-        1,
+        -1,
         0,
         SYSDATETIME(),
         9000
@@ -1724,14 +1745,21 @@ VALUES (
 
 -- Update
 UPDATE Posts
-SET Score = 9050
-WHERE Id = 12496727
+SET Score = 10000
+WHERE Id = 12496734
 
 -- Delete
 DELETE Posts
-WHERE Id = 12496727
+WHERE Id = 12496735
 
-SELECT * FROM Posts ORDER BY Id DESC;
+SELECT OwnerUserId AS UserId,
+COUNT(*) AS TotalNumberOfPostsPerUser,  
+SUM(Score) AS TotalPostScorePerUser,
+ROUND(AVG(CAST(Score AS DECIMAL(10,2))),2) AS AveragePostsScorePerUser
+FROM Posts
+GROUP BY OwnerUserId
+
+SELECT * FROM Posts ORDER BY Id DESC
 
 SELECT * FROM PostStatistics;
 
